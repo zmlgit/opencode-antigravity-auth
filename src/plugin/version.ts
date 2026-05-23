@@ -1,10 +1,11 @@
 /**
  * Remote Antigravity version fetcher.
  *
- * Mirrors the Antigravity-Manager's version resolution strategy:
+ * Version resolution strategy:
  *   1. Auto-updater API (plain text with semver)
- *   2. Changelog page scrape (first 5000 chars)
- *   3. Hardcoded fallback in constants.ts
+ *   2. Homebrew cask API (formulae.brew.sh)
+ *   3. Changelog page scrape (first 5000 chars)
+ *   4. Hardcoded fallback in constants.ts
  *
  * Called once at plugin startup to ensure headers use the latest
  * supported version, avoiding "version no longer supported" errors.
@@ -16,12 +17,13 @@ import { getAntigravityVersion, setAntigravityVersion } from "../constants";
 import { createLogger } from "./logger";
 
 const VERSION_URL = "https://antigravity-auto-updater-974169037036.us-central1.run.app";
+const HOMEBREW_CASK_URL = "https://formulae.brew.sh/api/cask/antigravity.json";
 const CHANGELOG_URL = "https://antigravity.google/changelog";
 const FETCH_TIMEOUT_MS = 5000;
 const CHANGELOG_SCAN_CHARS = 5000;
 const VERSION_REGEX = /\d+\.\d+\.\d+/;
 
-type VersionSource = "api" | "changelog" | "fallback";
+type VersionSource = "api" | "homebrew" | "changelog" | "fallback";
 
 function parseVersion(text: string): string | null {
   const match = text.match(VERSION_REGEX);
@@ -44,6 +46,23 @@ async function tryFetchVersion(url: string, maxChars?: number): Promise<string |
   }
 }
 
+async function tryFetchHomebrewVersion(): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(HOMEBREW_CASK_URL, { signal: controller.signal });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const raw = data?.version as string | undefined;
+    if (!raw) return null;
+    return parseVersion(raw);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 /**
  * Fetch the latest Antigravity version and update the global constant.
  * Safe to call before logger is initialized (will silently skip logging).
@@ -59,16 +78,22 @@ export async function initAntigravityVersion(): Promise<void> {
   if (version) {
     source = "api";
   } else {
-    // 2. Try changelog page scrape
-    version = await tryFetchVersion(CHANGELOG_URL, CHANGELOG_SCAN_CHARS);
+    // 2. Try Homebrew cask API
+    version = await tryFetchHomebrewVersion();
     if (version) {
-      source = "changelog";
+      source = "homebrew";
     } else {
-      // 3. Fall back to hardcoded
-      source = "fallback";
-      setAntigravityVersion(fallback);
-      log.info("version-fetch-failed", { fallback });
-      return;
+      // 3. Try changelog page scrape
+      version = await tryFetchVersion(CHANGELOG_URL, CHANGELOG_SCAN_CHARS);
+      if (version) {
+        source = "changelog";
+      } else {
+        // 4. Fall back to hardcoded
+        source = "fallback";
+        setAntigravityVersion(fallback);
+        log.info("version-fetch-failed", { fallback });
+        return;
+      }
     }
   }
 
