@@ -205,7 +205,7 @@ export function updatePinnedVersion(configPath: string, oldEntry: string, newVer
     logAutoUpdate(`Updated ${configPath}: ${oldEntry} → ${newEntry}`);
     return true;
   } catch (err) {
-    console.error(`[auto-update-checker] Failed to update config file ${configPath}:`, err);
+    logAutoUpdate(`Failed to update config file ${configPath}: ${err}`);
     return false;
   }
 }

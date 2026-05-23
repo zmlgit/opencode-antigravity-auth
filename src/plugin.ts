@@ -1,5 +1,5 @@
 import { exec } from "node:child_process";
-import { tool } from "@opencode-ai/plugin";
+import { tool } from "@opencode-ai/plugin/tool";
 import {
   ANTIGRAVITY_DEFAULT_PROJECT_ID,
   ANTIGRAVITY_ENDPOINT_FALLBACKS,
@@ -1227,7 +1227,7 @@ export const createAntigravityPlugin = (providerId: string) => async (
   initLogger(client);
   
   // Fetch latest Antigravity version from remote API (non-blocking, falls back to hardcoded)
-  await initAntigravityVersion();
+  initAntigravityVersion().catch(() => {});
   
   // Initialize health tracker for hybrid strategy
   if (config.health_score) {
