@@ -48,6 +48,11 @@ export const MODEL_ALIASES: Record<string, string> = {
   "gemini-3-flash-medium": "gemini-3-flash",
   "gemini-3-flash-high": "gemini-3-flash",
 
+  "gemini-3.5-flash": "gemini-3.5-flash-low",
+  "gemini-3.5-flash-low": "gemini-3.5-flash-extra-low",
+  "gemini-3.5-flash-medium": "gemini-3.5-flash-low",
+  "gemini-3.5-flash-high": "gemini-3-flash-agent",
+
   // Claude proxy names (gemini- prefix for compatibility)
   "gemini-claude-opus-4-6-thinking-low": "claude-opus-4-6-thinking",
   "gemini-claude-opus-4-6-thinking-medium": "claude-opus-4-6-thinking",
@@ -137,6 +142,19 @@ function isGemini3FlashModel(model: string): boolean {
   return GEMINI_3_FLASH_REGEX.test(model);
 }
 
+function resolveGemini35FlashModel(tier: ThinkingTier | undefined): string {
+  switch (tier) {
+    case "low":
+      return "gemini-3.5-flash-extra-low";
+    case "medium":
+      return "gemini-3.5-flash-low";
+    case "high":
+      return "gemini-3-flash-agent";
+    default:
+      return "gemini-3.5-flash-low";
+  }
+}
+
 /**
  * Resolves a model name with optional tier suffix and quota prefix to its actual API model name
  * and corresponding thinking configuration.
@@ -187,8 +205,10 @@ export function resolveModelWithTier(requestedModel: string, options: ModelResol
   if (skipAlias) {
     if (isGemini3Pro && !tier && !isImageModel) {
       antigravityModel = `${modelWithoutQuota}-low`;
-    } else if (isGemini3Flash && tier) {
-      antigravityModel = baseName;
+    } else if (isGemini3Flash) {
+      antigravityModel = modelWithoutQuota.includes("3.5")
+        ? resolveGemini35FlashModel(tier)
+        : "gemini-3-flash";
     }
   }
 
